@@ -159,12 +159,14 @@ def worker():
             time.sleep(0.05)
 
 
-def make_icon(active: bool):
-    img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+def make_icon(active: bool, size: int = 64):
+    k = size / 64
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     c = (240, 180, 55, 255) if active else (130, 130, 130, 255)
-    d.polygon([(32, 4), (60, 32), (32, 60), (4, 32)], outline=c, width=5)
-    d.polygon([(22, 36), (42, 36), (32, 46)], fill=c)
+    pts = lambda *p: [(x * k, y * k) for x, y in p]
+    d.polygon(pts((32, 4), (60, 32), (32, 60), (4, 32)), outline=c, width=max(1, round(5 * k)))
+    d.polygon(pts((22, 36), (42, 36), (32, 46)), fill=c)
     return img
 
 
