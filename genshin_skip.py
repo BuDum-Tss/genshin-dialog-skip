@@ -90,9 +90,10 @@ def key_down(vk):
 THRESHOLD = 0.02
 COOLDOWN = 0.30
 F_REGION = (0.55, 0.30, 0.82, 0.92)     # где появляется список вариантов ответа
-AUTO_REGION = (0.0, 0.0, 0.25, 0.12)    # кнопка «Авто» — есть только в диалогах
+EYE_REGION = (0.0, 0.0, 0.25, 0.12)     # верхний левый угол: кнопка «скрыть интерфейс» (глаз)
 F_THRESHOLD = 0.75
-AUTO_THRESHOLD = 0.7
+EYE_THRESHOLD = 0.82
+F_REF_W, EYE_REF_W = 1128.0, 1919.0     # ширина кадра, на котором вырезаны шаблоны
 state = {"paused": False, "skip_dialog": True, "skip_choice": True, "running": True}
 
 
@@ -101,19 +102,20 @@ def _tpl(b64):
     return np.asarray(img)
 
 
-F_TPL, AUTO_TPL = _tpl(templates.F_PNG), _tpl(templates.AUTO_PNG)
+F_TPL, EYE_TPL = _tpl(templates.F_PNG), _tpl(templates.EYE_PNG)
 
 
-def match(gray_frame, tpl, region, scale):
-    h, w = gray_frame.shape
-    x0, y0, x1, y1 = region
-    sub = gray_frame[int(h * y0):int(h * y1), int(w * x0):int(w * x1)]
+def match(gray, tpl, scale):
+    """Лучшее совпадение шаблона (по рисунку, а не по цвету пикселей) на кадре."""
     t = cv2.resize(tpl, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA) if abs(scale - 1) > 0.02 else tpl
-    if sub.shape[0] < t.shape[0] or sub.shape[1] < t.shape[1]:
-        return 0.0, (0, 0)
-    res = cv2.matchTemplate(sub, t, cv2.TM_CCOEFF_NORMED)
-    _, mx, _, loc = cv2.minMaxLoc(res)
-    return float(mx), loc
+    if gray.shape[0] < t.shape[0] or gray.shape[1] < t.shape[1]:
+        return 0.0
+    res = cv2.matchTemplate(gray, t, cv2.TM_CCOEFF_NORMED)
+    return float(res.max())
+
+
+def in_dialog(gray_eye, w):
+    return match(gray_eye, EYE_TPL, w / EYE_REF_W) >= EYE_THRESHOLD
 
 
 def press_key(scan):
@@ -138,19 +140,17 @@ def worker():
                 if (not state["paused"]) and any(t.lower() in title.lower() for t in WINDOW_TITLES):
                     x, y, w, h = client_rect(hwnd)
                     if w > 0 and h > 0:
-                        if state["skip_dialog"]:
-                            shot = grab(sct, x, y, w, h, REGION)[..., [2, 1, 0]]
-                            if gold_ratio(shot) >= THRESHOLD:
-                                press_space()
-                                time.sleep(COOLDOWN)
-                                continue
-                        if state["skip_choice"]:
-                            full = cv2.cvtColor(grab(sct, x, y, w, h, (0, 0, 1, 1)), cv2.COLOR_BGRA2GRAY)
-                            sc = w / 1128.0
-                            a, _ = match(full, AUTO_TPL, AUTO_REGION, sc)
-                            if a >= AUTO_THRESHOLD:
-                                f, _ = match(full, F_TPL, F_REGION, sc)
-                                if f >= F_THRESHOLD:
+                        eye = cv2.cvtColor(grab(sct, x, y, w, h, EYE_REGION), cv2.COLOR_BGRA2GRAY)
+                        if in_dialog(eye, w):
+                            if state["skip_dialog"]:
+                                shot = grab(sct, x, y, w, h, REGION)[..., [2, 1, 0]]
+                                if gold_ratio(shot) >= THRESHOLD:
+                                    press_space()
+                                    time.sleep(COOLDOWN)
+                                    continue
+                            if state["skip_choice"]:
+                                fr = cv2.cvtColor(grab(sct, x, y, w, h, F_REGION), cv2.COLOR_BGRA2GRAY)
+                                if match(fr, F_TPL, w / F_REF_W) >= F_THRESHOLD:
                                     press_key(0x21)  # F
                                     time.sleep(0.7)
                                     continue
