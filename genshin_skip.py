@@ -105,7 +105,7 @@ COOLDOWN = 0.30
 F_REGION = (0.55, 0.30, 0.82, 0.92)     # где появляется список вариантов ответа
 EYE_REGION = (0.0, 0.0, 0.25, 0.12)     # верхний левый угол: кнопка «скрыть интерфейс» (глаз)
 F_THRESHOLD = 0.75
-EYE_THRESHOLD = 0.82
+EYE_THRESHOLD = 0.72
 F_REF_W, EYE_REF_W = 1128.0, 1919.0     # ширина кадра, на котором вырезаны шаблоны
 state = {"paused": False, "skip_dialog": True, "skip_choice": True, "running": True}
 
@@ -116,19 +116,38 @@ def _tpl(b64):
 
 
 F_TPL, EYE_TPL = _tpl(templates.F_PNG), _tpl(templates.EYE_PNG)
+EYE_MASK = None  # задаётся ниже, после определения circle_mask
 
 
-def match(gray, tpl, scale):
-    """Лучшее совпадение шаблона (по рисунку, а не по цвету пикселей) на кадре."""
-    t = cv2.resize(tpl, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA) if abs(scale - 1) > 0.02 else tpl
-    if gray.shape[0] < t.shape[0] or gray.shape[1] < t.shape[1]:
+def circle_mask(shape, r_frac=0.46):
+    h, w = shape
+    m = np.zeros((h, w), np.uint8)
+    cv2.circle(m, (w // 2, h // 2), int(min(h, w) * r_frac), 255, -1)
+    return m
+
+
+def match(gray, tpl, scale, mask=None):
+    """Лучшее совпадение шаблона (по рисунку, а не по цвету пикселей) на кадре.
+    mask — область шаблона, которая учитывается (например, круг кнопки без фона)."""
+    if abs(scale - 1) > 0.02:
+        tpl = cv2.resize(tpl, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+        if mask is not None:
+            mask = cv2.resize(mask, (tpl.shape[1], tpl.shape[0]), interpolation=cv2.INTER_NEAREST)
+    if gray.shape[0] < tpl.shape[0] or gray.shape[1] < tpl.shape[1]:
         return 0.0
-    res = cv2.matchTemplate(gray, t, cv2.TM_CCOEFF_NORMED)
+    if mask is not None:
+        res = cv2.matchTemplate(gray, tpl, cv2.TM_CCOEFF_NORMED, mask=mask)
+        res = np.nan_to_num(res, nan=0.0, posinf=0.0, neginf=0.0)
+    else:
+        res = cv2.matchTemplate(gray, tpl, cv2.TM_CCOEFF_NORMED)
     return float(res.max())
 
 
 def in_dialog(gray_eye, w):
-    return match(gray_eye, EYE_TPL, w / EYE_REF_W) >= EYE_THRESHOLD
+    return match(gray_eye, EYE_TPL, w / EYE_REF_W, EYE_MASK) >= EYE_THRESHOLD
+
+
+EYE_MASK = circle_mask(EYE_TPL.shape)
 
 
 def press_key(scan):
