@@ -45,6 +45,19 @@ def gold_ratio(rgb: np.ndarray) -> float:
     return float(is_gold(rgb).mean())
 
 
+def is_cyan(rgb: np.ndarray) -> np.ndarray:
+    """Маска ярко-голубых пикселей синего ромбика (диалоги Ока Грай и т. п.)."""
+    r = rgb[..., 0].astype(int)
+    g = rgb[..., 1].astype(int)
+    b = rgb[..., 2].astype(int)
+    return (g > 185) & (b > 200) & (r < 140) & (g - r > 90)
+
+
+def icon_ratio(rgb: np.ndarray) -> float:
+    """Доля пикселей ромбика «продолжить» — золотого или синего."""
+    return max(float(is_gold(rgb).mean()), float(is_cyan(rgb).mean()))
+
+
 def foreground_window():
     hwnd = user32.GetForegroundWindow()
     buf = ctypes.create_unicode_buffer(256)
@@ -144,7 +157,7 @@ def worker():
                         if in_dialog(eye, w):
                             if state["skip_dialog"]:
                                 shot = grab(sct, x, y, w, h, REGION)[..., [2, 1, 0]]
-                                if gold_ratio(shot) >= THRESHOLD:
+                                if icon_ratio(shot) >= THRESHOLD:
                                     press_space()
                                     time.sleep(COOLDOWN)
                                     continue
