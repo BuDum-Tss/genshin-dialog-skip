@@ -24,6 +24,16 @@
 
 Иконка золотая — работает, серая — остановлено (пауза или обе галки сняты).
 
+## Запуск вместе с игрой
+
+В релизе рядом с `GenshinSkip.exe` лежит `create-launcher-shortcut.ps1`. Положите оба файла в одну папку и выполните (подставьте путь к своему лаунчеру):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File create-launcher-shortcut.ps1 -LauncherPath "C:\Program Files\HoYoPlay\launcher.exe" -LauncherArgs "--game=hk4e_global"
+```
+
+На рабочем столе появится ярлык «Genshin + Skip»: он запускает Genshin Skip (если тот ещё не запущен), а затем лаунчер игры. Параметры: `-LauncherArgs`, `-SkipPath`, `-Name`, `-OutputDir`.
+
 ## Требования и ограничения
 
 - Windows 10/11, Genshin Impact в оконном или безрамочном режиме (в «настоящем» полноэкранном захват экрана может не работать).
